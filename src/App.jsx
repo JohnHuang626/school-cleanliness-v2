@@ -60,6 +60,13 @@ const SCORE_TYPES = [
   { id: 'exterior', label: '外掃區域', icon: Trees, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' }
 ];
 
+// Helper: 取得本地時區的 YYYY-MM-DD (解決 UTC 造成的日期落後一天問題)
+const getLocalDateString = () => {
+  const d = new Date();
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().split('T')[0];
+};
+
 // Helper: Get Week Number
 const getWeekNumber = (d) => {
   if (!d || isNaN(d.getTime())) return "Invalid-Date";
@@ -91,7 +98,7 @@ const App = () => {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   
   // Scoring Form State
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString()); // 使用新寫的 Helper 來獲取正確本地日期
   const [selectedType, setSelectedType] = useState('classroom');
   const [selectedGrade, setSelectedGrade] = useState(1);
   const [currentScores, setCurrentScores] = useState({}); 
