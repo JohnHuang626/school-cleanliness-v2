@@ -10,7 +10,7 @@ import {
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, doc, onSnapshot, getDoc, setDoc,
-  serverTimestamp, writeBatch, query, orderBy, limit, where 
+  serverTimestamp, writeBatch, query, orderBy, limit, where, getDocs
 } from 'firebase/firestore';
 import { 
   getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken 
@@ -92,6 +92,7 @@ const App = () => {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
+  const [adminAction, setAdminAction] = useState(null); // 新增：用於記錄密碼驗證後要執行的動作
 
   // UI State
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', title: '', message: '', onConfirm: null });
@@ -358,7 +359,13 @@ const App = () => {
 
   // Settings & Admin Handlers
   const handleSettingsClick = () => {
-    // 點擊設定時，開啟密碼輸入視窗
+    setAdminAction('settings');
+    setAdminPassword('');
+    setShowAdminModal(true);
+  };
+
+  const handleClearHistoryRequest = () => {
+    setAdminAction('clearHistory');
     setAdminPassword('');
     setShowAdminModal(true);
   };
@@ -367,11 +374,57 @@ const App = () => {
     if (adminPassword === 'admin888') {
       setShowAdminModal(false);
       setAdminPassword('');
-      setTempClassCounts(classCounts); // Reset temp to current
-      setActiveTab('settings');
-      showToast('驗證成功', 'success');
+      
+      if (adminAction === 'settings') {
+        setTempClassCounts(classCounts); // Reset temp to current
+        setActiveTab('settings');
+        showToast('驗證成功', 'success');
+      } else if (adminAction === 'clearHistory') {
+        setModalConfig({
+          isOpen: true,
+          type: 'delete',
+          title: '清空所有資料',
+          message: '警告：這將刪除資料庫中「所有」的整潔評分資料，此操作無法復原！確定要執行嗎？',
+          onConfirm: executeClearHistory
+        });
+      }
     } else {
       showToast('密碼錯誤', 'error');
+    }
+  };
+
+  const executeClearHistory = async () => {
+    closeModal();
+    setSubmitting(true);
+    try {
+      const q = collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME);
+      const snapshot = await getDocs(q);
+      
+      // Firestore batch 最多一次 500 筆操作，這裡做分批處理防呆
+      const batches = [];
+      let batch = writeBatch(db);
+      let operationCounter = 0;
+      
+      snapshot.docs.forEach((documentSnap) => {
+          batch.delete(documentSnap.ref);
+          operationCounter++;
+          if (operationCounter >= 490) { 
+              batches.push(batch.commit());
+              batch = writeBatch(db);
+              operationCounter = 0;
+          }
+      });
+      if (operationCounter > 0) {
+          batches.push(batch.commit());
+      }
+      
+      await Promise.all(batches);
+      showToast("所有紀錄已清空", 'success');
+    } catch (e) {
+      console.error("Clear History Error:", e);
+      showToast(`清空失敗: ${e.message}`, 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -827,7 +880,12 @@ const App = () => {
                     <h3 className="font-bold text-slate-800">最新評分紀錄</h3>
                     <span className="text-xs bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded">最近 300 筆</span>
                   </div>
-                  <AlertOctagon size={16} className="text-slate-400" />
+                  <button 
+                    onClick={handleClearHistoryRequest}
+                    className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded transition-colors"
+                  >
+                    <Trash2 size={14} /> 全部清除
+                  </button>
                </div>
                <div className="max-h-[60vh] overflow-y-auto">
                  <table className="w-full text-sm">
