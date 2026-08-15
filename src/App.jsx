@@ -141,7 +141,13 @@ const App = () => {
   const [selectedGrade, setSelectedGrade] = useState(1);
   const [currentScores, setCurrentScores] = useState({}); 
   const [remarks, setRemarks] = useState(''); 
-  const [viewWeek, setViewWeek] = useState(getWeekNumber(new Date()));
+  
+  // 修改：將預設的 viewWeek 設為前一週 (即當前時間減去 7 天)
+  const [viewWeek, setViewWeek] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7); // 減去 7 天回到前一週
+    return getWeekNumber(d);
+  });
 
   useEffect(() => {
     const initAuth = async () => {
@@ -410,12 +416,27 @@ const App = () => {
       if (semesterStart) {
         const relWeek = getRelativeWeekNumber(viewWeek, semesterStart);
         if (relWeek !== null) {
-           if (relWeek > 0) return `本學期 第 ${relWeek} 週`;
+           if (relWeek > 0) return `第 ${relWeek} 週`;
            else return `開學前 第 ${Math.abs(relWeek - 1)} 週`;
         }
       }
-      return `${parts[0]}年 第 ${parts[1]} 週`;
+      return `第 ${parts[1]} 週`;
   }, [viewWeek, semesterStart]);
+
+  // 新增：計算「真實世界的本週」是第幾週
+  const realCurrentWeekLabel = useMemo(() => {
+      const currentRealWeekStr = getWeekNumber(new Date());
+      if (semesterStart) {
+        const relWeek = getRelativeWeekNumber(currentRealWeekStr, semesterStart);
+        if (relWeek !== null) {
+           if (relWeek > 0) return `第 ${relWeek} 週`;
+           else return `開學前 第 ${Math.abs(relWeek - 1)} 週`;
+        }
+      }
+      const parts = currentRealWeekStr.split('-W');
+      if (parts.length === 2) return `第 ${parts[1]} 週`;
+      return currentRealWeekStr;
+  }, [semesterStart]);
 
   const getTypeName = (typeId) => SCORE_TYPES.find(t => t.id === typeId)?.label || typeId;
 
@@ -821,10 +842,13 @@ const App = () => {
             <div className="relative flex items-center justify-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <button onClick={() => changeWeek(-1)} className="absolute left-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200"><ChevronLeft size={20}/></button>
               
-              <div className="text-center">
-                <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">目前檢視</div>
-                <div className="text-xl font-black text-emerald-900">{currentWeekLabel}</div>
-                <div className="text-xs text-emerald-600 font-bold">(教室 + 外掃 總積分)</div>
+              <div className="text-center flex flex-col items-center">
+                <div className="bg-slate-100 text-slate-500 text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full mb-2">
+                  本週是 {realCurrentWeekLabel}
+                </div>
+                <div className="text-sm font-bold text-slate-500">你檢視的是</div>
+                <div className="text-2xl font-black text-emerald-900 mt-1">{currentWeekLabel}</div>
+                <div className="text-xs text-emerald-600 font-bold mt-1">(教室 + 外掃 總積分)</div>
               </div>
               
               <div className="absolute right-4 flex gap-2">
