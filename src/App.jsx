@@ -142,11 +142,9 @@ const App = () => {
   const [currentScores, setCurrentScores] = useState({}); 
   const [remarks, setRemarks] = useState(''); 
   
-  // 修改：將預設的 viewWeek 設為前一週 (即當前時間減去 7 天)
+  // 修改：將預設的 viewWeek 改回當週
   const [viewWeek, setViewWeek] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7); // 減去 7 天回到前一週
-    return getWeekNumber(d);
+    return getWeekNumber(new Date());
   });
 
   useEffect(() => {
@@ -250,8 +248,6 @@ const App = () => {
 
     filtered.forEach(record => {
       if (!stats[record.classId]) {
-        // 如果歷史資料中有班級，但現在設定中已移除該班級，這裡會忽略它
-        // 若希望顯示歷史資料，可以改為自動補上 key
         return;
       }
       if (record.type === 'classroom') stats[record.classId].classroom += record.score;
@@ -280,7 +276,7 @@ const App = () => {
     let streaks = {}; // 紀錄連續第一名的週數
     let currentWeekResults = {};
     let currentThreeWeekWinners = [];
-    let semesterHistoryData = []; // 新增：儲存所有週次歷史的陣列
+    let semesterHistoryData = []; 
 
     // 依照時間順序，一週一週模擬結算
     allWeeks.forEach(week => {
