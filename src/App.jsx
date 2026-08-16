@@ -306,60 +306,86 @@ const App = () => {
       const newThreeWeekWinners = [];
 
       GRADES.forEach(g => {
-        const classData = getClassesList(g, classCounts).map(c => ({ classId: c, total: currentTotals[c] }));
+        let classData = getClassesList(g, classCounts).map(c => ({ classId: c, total: currentTotals[c] }));
+        
+        let top1 = null;
+        let top2 = null;
+        let sortedClasses = [];
 
-        const uniqueScores = [...new Set(classData.map(c => c.total))].sort((a, b) => b - a);
-        const highestScore = uniqueScores[0];
-        const secondHighestScore = uniqueScores[1];
+        // 只針對有拿分數的班級進行排名選拔
+        const classesWithScore = classData.filter(c => c.total > 0);
 
-        classData.sort((a, b) => {
-          if (a.total !== b.total) return b.total - a.total;
+        if (classesWithScore.length > 0) {
+            // --- 【第一輪選拔】：決定第一名 ---
+            const highestScore = Math.max(...classesWithScore.map(c => c.total));
+            const candidatesForFirst = classesWithScore.filter(c => c.total === highestScore);
+            
+            candidatesForFirst.sort((a, b) => {
+                // 第一名專屬同分突破規則
+                const aLastFirst = lastWeekFirsts.includes(a.classId);
+                const bLastFirst = lastWeekFirsts.includes(b.classId);
+                if (aLastFirst !== bLastFirst) return aLastFirst ? -1 : 1; // 1. 上週第一名優先
 
-          const score = a.total;
-          const aRand = getStableRandom(a.classId + week);
-          const bRand = getStableRandom(b.classId + week);
+                const aFirsts = firstPlaceCounts[a.classId] || 0;
+                const bFirsts = firstPlaceCounts[b.classId] || 0;
+                if (aFirsts !== bFirsts) return aFirsts - bFirsts; // 2. 最少拿第一名優先
 
-          if (score === highestScore && score > 0) {
-            // 【爭奪第一名】同分規則
-            const aLastFirst = lastWeekFirsts.includes(a.classId);
-            const bLastFirst = lastWeekFirsts.includes(b.classId);
-            if (aLastFirst !== bLastFirst) return aLastFirst ? -1 : 1; // 1. 上週第一名優先
+                const aTime = earliestScoreTime[a.classId] || Infinity;
+                const bTime = earliestScoreTime[b.classId] || Infinity;
+                if (aTime !== bTime) return aTime - bTime; // 3. 最早拿分優先
 
-            const aFirsts = firstPlaceCounts[a.classId] || 0;
-            const bFirsts = firstPlaceCounts[b.classId] || 0;
-            if (aFirsts !== bFirsts) return aFirsts - bFirsts; // 2. 最少拿第一名優先
+                const aRand = getStableRandom(a.classId + week);
+                const bRand = getStableRandom(b.classId + week);
+                return aRand - bRand; // 4. 穩定隨機
+            });
+            top1 = candidatesForFirst[0];
 
-            const aTime = earliestScoreTime[a.classId] || Infinity;
-            const bTime = earliestScoreTime[b.classId] || Infinity;
-            if (aTime !== bTime) return aTime - bTime; // 3. 最早拿分優先
+            // --- 【第二輪選拔】：決定第二名 ---
+            // 將第一名從候選名單剔除，剩下的人（包含剛才第一名落選的同分班級）繼續比
+            const remainingClasses = classesWithScore.filter(c => c.classId !== top1.classId);
+            
+            if (remainingClasses.length > 0) {
+                const highestRemainingScore = Math.max(...remainingClasses.map(c => c.total));
+                const candidatesForSecond = remainingClasses.filter(c => c.total === highestRemainingScore);
+                
+                candidatesForSecond.sort((a, b) => {
+                    // 第二名專屬同分突破規則 (如果第一名有三個班並列，剩下兩個班會在這裡競爭)
+                    const aAwards = awardCounts[a.classId] || 0;
+                    const bAwards = awardCounts[b.classId] || 0;
+                    if (aAwards !== bAwards) return aAwards - bAwards; // 1. 最少獲獎優先
 
-            return aRand - bRand; // 4. 穩定隨機
-          } else if (score === secondHighestScore && score > 0) {
-            // 【爭奪第二名】同分規則
-            const aAwards = awardCounts[a.classId] || 0;
-            const bAwards = awardCounts[b.classId] || 0;
-            if (aAwards !== bAwards) return aAwards - bAwards; // 1. 最少獲獎優先
+                    const aTime = earliestScoreTime[a.classId] || Infinity;
+                    const bTime = earliestScoreTime[b.classId] || Infinity;
+                    if (aTime !== bTime) return aTime - bTime; // 2. 最早拿分優先
 
-            const aTime = earliestScoreTime[a.classId] || Infinity;
-            const bTime = earliestScoreTime[b.classId] || Infinity;
-            if (aTime !== bTime) return aTime - bTime; // 2. 最早拿分優先
+                    const aRand = getStableRandom(a.classId + week);
+                    const bRand = getStableRandom(b.classId + week);
+                    return aRand - bRand; // 3. 穩定隨機
+                });
+                top2 = candidatesForSecond[0];
+            }
+        }
 
-            return aRand - bRand; // 3. 穩定隨機
-          }
-          return aRand - bRand;
+        // 組裝供 UI 顯示的排序結果陣列
+        if (top1) sortedClasses.push(top1);
+        if (top2) sortedClasses.push(top2);
+        
+        let others = classData.filter(c => c.classId !== top1?.classId && c.classId !== top2?.classId);
+        others.sort((a, b) => {
+            if (a.total !== b.total) return b.total - a.total; // 分數高的排前面
+            return getStableRandom(a.classId + week) - getStableRandom(b.classId + week); // 剩下的同分穩定隨機
         });
+        
+        sortedClasses = sortedClasses.concat(others);
+        resultForWeek[g] = sortedClasses;
 
-        resultForWeek[g] = classData;
-
-        const top1 = classData[0];
-        const top2 = classData[1];
-
-        if (top1 && top1.total > 0) {
+        // 紀錄獲獎次數，供未來的週次使用
+        if (top1) {
           currentWeekFirsts.push(top1.classId);
           firstPlaceCounts[top1.classId] = (firstPlaceCounts[top1.classId] || 0) + 1;
           awardCounts[top1.classId] = (awardCounts[top1.classId] || 0) + 1;
         }
-        if (top2 && top2.total > 0) {
+        if (top2) {
           currentWeekSeconds.push(top2.classId);
           awardCounts[top2.classId] = (awardCounts[top2.classId] || 0) + 1;
         }
