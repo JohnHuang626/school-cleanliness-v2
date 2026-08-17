@@ -122,7 +122,7 @@ const App = () => {
   const [classCounts, setClassCounts] = useState(DEFAULT_CLASS_COUNTS);
   const [tempClassCounts, setTempClassCounts] = useState(DEFAULT_CLASS_COUNTS);
   
-  // 新增：學期日期設定
+  // 學期日期設定
   const [semesterStart, setSemesterStart] = useState(DEFAULT_SEMESTER_START);
   const [semesterEnd, setSemesterEnd] = useState(DEFAULT_SEMESTER_END);
   const [tempSemesterStart, setTempSemesterStart] = useState(DEFAULT_SEMESTER_START);
@@ -142,7 +142,7 @@ const App = () => {
   const [currentScores, setCurrentScores] = useState({}); 
   const [remarks, setRemarks] = useState(''); 
   
-  // 修改：將預設的 viewWeek 改回當週
+  // 預設檢視當週
   const [viewWeek, setViewWeek] = useState(() => {
     return getWeekNumber(new Date());
   });
@@ -728,7 +728,7 @@ const App = () => {
 
   return (
     <>
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-800 pb-20 relative print:hidden">
+    <div className="min-h-screen bg-slate-100 font-sans text-slate-800 pb-20 relative print-hide">
       
       {/* Admin Login Modal */}
       {showAdminModal && (
@@ -1063,7 +1063,18 @@ const App = () => {
     </div>
 
     {/* --- 列印專用版面 (在網頁上隱藏，列印時顯示) --- */}
-    <div className="hidden print:block bg-white p-8 text-black font-sans w-full max-w-none m-0">
+    <style dangerouslySetInnerHTML={{__html: `
+      @media print {
+        body { background: white !important; }
+        .print-hide { display: none !important; }
+        .print-show { display: block !important; }
+      }
+      @media screen {
+        .print-show { display: none !important; }
+      }
+    `}} />
+
+    <div className="print-show bg-white p-8 text-black font-sans w-full max-w-none m-0">
       <div className="text-center mb-8 border-b-2 border-black pb-4">
         <h1 className="text-3xl font-black mb-2">校園整潔榮譽榜</h1>
         <h2 className="text-xl font-bold text-gray-700">{currentWeekLabel}</h2>
@@ -1094,7 +1105,7 @@ const App = () => {
                   <span className="align-middle">{top1}</span>
                   {isThreeWeekWinner && (
                     <span className="text-sm font-bold text-black border-2 border-black ml-3 px-2 py-0.5 rounded align-middle whitespace-nowrap tracking-wider inline-block">
-                      連續三週第一名
+                      [連續三週第一名]
                     </span>
                   )}
                 </td>
