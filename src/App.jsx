@@ -284,6 +284,9 @@ const App = () => {
       const currentTotals = {};
       const earliestScoreTime = {};
 
+      const relWeek = getRelativeWeekNumber(week, semesterStart);
+      const isSemesterWeek = relWeek !== null && relWeek > 0;
+
       GRADES.forEach(g => getClassesList(g, classCounts).forEach(c => currentTotals[c] = 0));
 
       weekRecords.forEach(r => {
@@ -375,34 +378,41 @@ const App = () => {
         sortedClasses = sortedClasses.concat(others);
         resultForWeek[g] = sortedClasses;
 
-        // 紀錄獲獎次數，供未來的週次使用
-        if (top1) {
-          currentWeekFirsts.push(top1.classId);
-          firstPlaceCounts[top1.classId] = (firstPlaceCounts[top1.classId] || 0) + 1;
-          awardCounts[top1.classId] = (awardCounts[top1.classId] || 0) + 1;
-        }
-        if (top2) {
-          currentWeekSeconds.push(top2.classId);
-          awardCounts[top2.classId] = (awardCounts[top2.classId] || 0) + 1;
+        // 紀錄獲獎次數，供未來的週次使用 (僅限正式開學後的週次)
+        if (isSemesterWeek) {
+          if (top1) {
+            currentWeekFirsts.push(top1.classId);
+            firstPlaceCounts[top1.classId] = (firstPlaceCounts[top1.classId] || 0) + 1;
+            awardCounts[top1.classId] = (awardCounts[top1.classId] || 0) + 1;
+          }
+          if (top2) {
+            currentWeekSeconds.push(top2.classId);
+            awardCounts[top2.classId] = (awardCounts[top2.classId] || 0) + 1;
+          }
         }
       });
 
       // 更新所有班級的「連續第一名」紀錄
-      GRADES.forEach(g => {
-        getClassesList(g, classCounts).forEach(classId => {
-            if (currentWeekFirsts.includes(classId)) {
-                streaks[classId] = (streaks[classId] || 0) + 1;
-                if (streaks[classId] === 3) {
-                    newThreeWeekWinners.push(classId); // 達標，記錄下來
-                    streaks[classId] = 0; // ★重新計算★：歸零，下次要再連贏三次
-                }
-            } else {
-                streaks[classId] = 0; // 若沒拿第一名，直接中斷歸零
-            }
+      if (isSemesterWeek) {
+        GRADES.forEach(g => {
+          getClassesList(g, classCounts).forEach(classId => {
+              if (currentWeekFirsts.includes(classId)) {
+                  streaks[classId] = (streaks[classId] || 0) + 1;
+                  if (streaks[classId] === 3) {
+                      newThreeWeekWinners.push(classId); // 達標，記錄下來
+                      streaks[classId] = 0; // ★重新計算★：歸零，下次要再連贏三次
+                  }
+              } else {
+                  streaks[classId] = 0; // 若沒拿第一名，直接中斷歸零
+              }
+          });
         });
-      });
-
-      lastWeekFirsts = currentWeekFirsts;
+        lastWeekFirsts = currentWeekFirsts;
+      } else {
+        // 如果是開學前，直接強制將連勝與上週第一紀錄中斷歸零，保證開學第1週是全新開始
+        streaks = {};
+        lastWeekFirsts = [];
+      }
 
       // 把這一週的結果存入歷史紀錄陣列中 (供列印使用)
       semesterHistoryData.push({
@@ -429,20 +439,19 @@ const App = () => {
         threeWeekWinners: currentThreeWeekWinners,
         semesterHistory: semesterHistoryData
     };
-  }, [scoresData, viewWeek, classCounts]);
+  }, [scoresData, viewWeek, classCounts, semesterStart]);
 
   const currentWeekLabel = useMemo(() => {
       const parts = viewWeek.split('-W');
-      if (parts.length !== 2) return viewWeek;
-      
-      if (semesterStart) {
+      if (parts.length === 2) {
         const relWeek = getRelativeWeekNumber(viewWeek, semesterStart);
         if (relWeek !== null) {
-           if (relWeek > 0) return `第 ${relWeek} 週`;
-           else return `開學前 第 ${Math.abs(relWeek - 1)} 週`;
+            if (relWeek > 0) return `第 ${relWeek} 週`;
+            else return `開學前 第 ${Math.abs(relWeek - 1)} 週`;
         }
+        return `第 ${parts[1]} 週`;
       }
-      return `第 ${parts[1]} 週`;
+      return viewWeek;
   }, [viewWeek, semesterStart]);
 
   // 新增：計算「真實世界的本週」是第幾週
