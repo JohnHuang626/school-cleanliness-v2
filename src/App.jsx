@@ -3,7 +3,8 @@ import {
   ClipboardList, Trophy, Save, Calendar, 
   ChevronLeft, ChevronRight, Trash2, BarChart3, 
   AlertTriangle, Lock, CheckCircle2,
-  Trees, Home, Brush, AlertOctagon, Settings, KeyRound, MessageSquare, Printer
+  Trees, Home, Brush, Settings, KeyRound, 
+  MessageSquare, Printer, Map, Image as ImageIcon, Upload, X
 } from 'lucide-react';
 
 // --- Firebase Imports ---
@@ -122,11 +123,15 @@ const App = () => {
   const [classCounts, setClassCounts] = useState(DEFAULT_CLASS_COUNTS);
   const [tempClassCounts, setTempClassCounts] = useState(DEFAULT_CLASS_COUNTS);
   
-  // 學期日期設定
   const [semesterStart, setSemesterStart] = useState(DEFAULT_SEMESTER_START);
   const [semesterEnd, setSemesterEnd] = useState(DEFAULT_SEMESTER_END);
   const [tempSemesterStart, setTempSemesterStart] = useState(DEFAULT_SEMESTER_START);
   const [tempSemesterEnd, setTempSemesterEnd] = useState(DEFAULT_SEMESTER_END);
+
+  // 新增：掃區分配圖 State
+  const [cleaningMapImage, setCleaningMapImage] = useState(null);
+  const [tempCleaningMapImage, setTempCleaningMapImage] = useState(null);
+  const [showMapModal, setShowMapModal] = useState(false);
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -142,7 +147,6 @@ const App = () => {
   const [currentScores, setCurrentScores] = useState({}); 
   const [remarks, setRemarks] = useState(''); 
   
-  // 預設檢視當週
   const [viewWeek, setViewWeek] = useState(() => {
     return getWeekNumber(new Date());
   });
@@ -187,6 +191,10 @@ const App = () => {
           if (data.semesterEnd) {
             setSemesterEnd(data.semesterEnd);
             setTempSemesterEnd(data.semesterEnd);
+          }
+          if (data.cleaningMapImage) {
+            setCleaningMapImage(data.cleaningMapImage);
+            setTempCleaningMapImage(data.cleaningMapImage);
           }
         }
       } catch (e) {
@@ -240,16 +248,13 @@ const App = () => {
     
     const stats = {}; 
     GRADES.forEach(g => {
-      // 使用動態的 classCounts
       getClassesList(g, classCounts).forEach(c => {
         stats[c] = { classroom: 0, exterior: 0, total: 0 };
       });
     });
 
     filtered.forEach(record => {
-      if (!stats[record.classId]) {
-        return;
-      }
+      if (!stats[record.classId]) return;
       if (record.type === 'classroom') stats[record.classId].classroom += record.score;
       else if (record.type === 'exterior') stats[record.classId].exterior += record.score;
       stats[record.classId].total += record.score;
@@ -265,7 +270,6 @@ const App = () => {
       return h;
     };
 
-    // 整理所有出現在資料庫的週次（包含目前檢視的週次），由舊到新排序，用來重現歷史
     const allWeeksSet = new Set(scoresData.map(d => d.week).filter(w => w <= viewWeek));
     allWeeksSet.add(viewWeek);
     const allWeeks = Array.from(allWeeksSet).sort();
@@ -273,19 +277,19 @@ const App = () => {
     let firstPlaceCounts = {};
     let awardCounts = {};
     let lastWeekFirsts = [];
-    let streaks = {}; // 紀錄連續第一名的週數
+    let streaks = {}; 
     let currentWeekResults = {};
     let currentThreeWeekWinners = [];
     let semesterHistoryData = []; 
 
-    // 依照時間順序，一週一週模擬結算
     allWeeks.forEach(week => {
+      // 檢查此週是否為開學前的週次 (過濾掉暑輔或開學前的打掃)
+      const relW = getRelativeWeekNumber(week, semesterStart);
+      const isBeforeSemester = relW !== null && relW <= 0;
+
       const weekRecords = scoresData.filter(d => d.week === week);
       const currentTotals = {};
       const earliestScoreTime = {};
-
-      const relWeek = getRelativeWeekNumber(week, semesterStart);
-      const isSemesterWeek = relWeek !== null && relWeek > 0;
 
       GRADES.forEach(g => getClassesList(g, classCounts).forEach(c => currentTotals[c] = 0));
 
@@ -311,7 +315,6 @@ const App = () => {
         let top2 = null;
         let sortedClasses = [];
 
-        // 只針對有拿分數的班級進行排名選拔
         const classesWithScore = classData.filter(c => c.total > 0);
 
         if (classesWithScore.length > 0) {
@@ -320,27 +323,25 @@ const App = () => {
             const candidatesForFirst = classesWithScore.filter(c => c.total === highestScore);
             
             candidatesForFirst.sort((a, b) => {
-                // 第一名專屬同分突破規則
                 const aLastFirst = lastWeekFirsts.includes(a.classId);
                 const bLastFirst = lastWeekFirsts.includes(b.classId);
-                if (aLastFirst !== bLastFirst) return aLastFirst ? -1 : 1; // 1. 上週第一名優先
+                if (aLastFirst !== bLastFirst) return aLastFirst ? -1 : 1; 
 
                 const aFirsts = firstPlaceCounts[a.classId] || 0;
                 const bFirsts = firstPlaceCounts[b.classId] || 0;
-                if (aFirsts !== bFirsts) return aFirsts - bFirsts; // 2. 最少拿第一名優先
+                if (aFirsts !== bFirsts) return aFirsts - bFirsts; 
 
                 const aTime = earliestScoreTime[a.classId] || Infinity;
                 const bTime = earliestScoreTime[b.classId] || Infinity;
-                if (aTime !== bTime) return aTime - bTime; // 3. 最早拿分優先
+                if (aTime !== bTime) return aTime - bTime; 
 
                 const aRand = getStableRandom(a.classId + week);
                 const bRand = getStableRandom(b.classId + week);
-                return aRand - bRand; // 4. 穩定隨機
+                return aRand - bRand; 
             });
             top1 = candidatesForFirst[0];
 
             // --- 【第二輪選拔】：決定第二名 ---
-            // 將第一名從候選名單剔除，剩下的人（包含剛才第一名落選的同分班級）繼續比
             const remainingClasses = classesWithScore.filter(c => c.classId !== top1.classId);
             
             if (remainingClasses.length > 0) {
@@ -348,38 +349,36 @@ const App = () => {
                 const candidatesForSecond = remainingClasses.filter(c => c.total === highestRemainingScore);
                 
                 candidatesForSecond.sort((a, b) => {
-                    // 第二名專屬同分突破規則 (如果第一名有三個班並列，剩下兩個班會在這裡競爭)
                     const aAwards = awardCounts[a.classId] || 0;
                     const bAwards = awardCounts[b.classId] || 0;
-                    if (aAwards !== bAwards) return aAwards - bAwards; // 1. 最少獲獎優先
+                    if (aAwards !== bAwards) return aAwards - bAwards; 
 
                     const aTime = earliestScoreTime[a.classId] || Infinity;
                     const bTime = earliestScoreTime[b.classId] || Infinity;
-                    if (aTime !== bTime) return aTime - bTime; // 2. 最早拿分優先
+                    if (aTime !== bTime) return aTime - bTime; 
 
                     const aRand = getStableRandom(a.classId + week);
                     const bRand = getStableRandom(b.classId + week);
-                    return aRand - bRand; // 3. 穩定隨機
+                    return aRand - bRand; 
                 });
                 top2 = candidatesForSecond[0];
             }
         }
 
-        // 組裝供 UI 顯示的排序結果陣列
         if (top1) sortedClasses.push(top1);
         if (top2) sortedClasses.push(top2);
         
         let others = classData.filter(c => c.classId !== top1?.classId && c.classId !== top2?.classId);
         others.sort((a, b) => {
-            if (a.total !== b.total) return b.total - a.total; // 分數高的排前面
-            return getStableRandom(a.classId + week) - getStableRandom(b.classId + week); // 剩下的同分穩定隨機
+            if (a.total !== b.total) return b.total - a.total; 
+            return getStableRandom(a.classId + week) - getStableRandom(b.classId + week); 
         });
         
         sortedClasses = sortedClasses.concat(others);
         resultForWeek[g] = sortedClasses;
 
-        // 紀錄獲獎次數，供未來的週次使用 (僅限正式開學後的週次)
-        if (isSemesterWeek) {
+        // 如果「不是」開學前，才累積獲獎紀錄與連勝紀錄
+        if (!isBeforeSemester) {
           if (top1) {
             currentWeekFirsts.push(top1.classId);
             firstPlaceCounts[top1.classId] = (firstPlaceCounts[top1.classId] || 0) + 1;
@@ -392,42 +391,42 @@ const App = () => {
         }
       });
 
-      // 更新所有班級的「連續第一名」紀錄
-      if (isSemesterWeek) {
+      // 如果「不是」開學前，才更新連勝機制；如果是開學前的最後一週，將所有人的連勝歸零
+      if (!isBeforeSemester) {
         GRADES.forEach(g => {
           getClassesList(g, classCounts).forEach(classId => {
               if (currentWeekFirsts.includes(classId)) {
                   streaks[classId] = (streaks[classId] || 0) + 1;
                   if (streaks[classId] === 3) {
-                      newThreeWeekWinners.push(classId); // 達標，記錄下來
-                      streaks[classId] = 0; // ★重新計算★：歸零，下次要再連贏三次
+                      newThreeWeekWinners.push(classId); 
+                      streaks[classId] = 0; 
                   }
               } else {
-                  streaks[classId] = 0; // 若沒拿第一名，直接中斷歸零
+                  streaks[classId] = 0; 
               }
           });
         });
-        lastWeekFirsts = currentWeekFirsts;
       } else {
-        // 如果是開學前，直接強制將連勝與上週第一紀錄中斷歸零，保證開學第1週是全新開始
-        streaks = {};
-        lastWeekFirsts = [];
+         // 開學前的週次，強制中斷連勝紀錄（防止跨學期連勝）
+         streaks = {};
+         lastWeekFirsts = [];
       }
 
-      // 把這一週的結果存入歷史紀錄陣列中 (供列印使用)
+      if (!isBeforeSemester) {
+         lastWeekFirsts = currentWeekFirsts;
+      }
+
       semesterHistoryData.push({
         week: week,
         rankings: resultForWeek
       });
 
-      // 如果這是我們目前在介面上查看的週次，就把結果存下來顯示
       if (week === viewWeek) {
         currentWeekResults = resultForWeek;
         currentThreeWeekWinners = newThreeWeekWinners;
       }
     });
 
-    // 防呆：如果完全沒有紀錄
     if (Object.keys(currentWeekResults).length === 0) {
         GRADES.forEach(g => {
             currentWeekResults[g] = getClassesList(g, classCounts).map(c => ({ classId: c, total: 0 }));
@@ -443,18 +442,18 @@ const App = () => {
 
   const currentWeekLabel = useMemo(() => {
       const parts = viewWeek.split('-W');
-      if (parts.length === 2) {
+      if (parts.length !== 2) return viewWeek;
+      
+      if (semesterStart) {
         const relWeek = getRelativeWeekNumber(viewWeek, semesterStart);
         if (relWeek !== null) {
-            if (relWeek > 0) return `第 ${relWeek} 週`;
-            else return `開學前 第 ${Math.abs(relWeek - 1)} 週`;
+           if (relWeek > 0) return `第 ${relWeek} 週`;
+           else return `開學前 第 ${Math.abs(relWeek - 1)} 週`;
         }
-        return `第 ${parts[1]} 週`;
       }
-      return viewWeek;
+      return `第 ${parts[1]} 週`;
   }, [viewWeek, semesterStart]);
 
-  // 新增：計算「真實世界的本週」是第幾週
   const realCurrentWeekLabel = useMemo(() => {
       const currentRealWeekStr = getWeekNumber(new Date());
       if (semesterStart) {
@@ -472,6 +471,53 @@ const App = () => {
   const getTypeName = (typeId) => SCORE_TYPES.find(t => t.id === typeId)?.label || typeId;
 
   const handleScoreChange = (classId, val) => setCurrentScores(prev => ({ ...prev, [classId]: val }));
+
+  // 新增：處理圖片上傳並進行壓縮
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // 檢查檔案類型
+    if (!file.type.startsWith('image/')) {
+        return showToast('請上傳圖片檔案 (JPG, PNG)', 'error');
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // 利用 Canvas 進行圖片壓縮與縮放 (限制最大邊長 1200px)
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 壓縮成 0.7 品質的 JPEG (非常節省資料庫空間)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        setTempCleaningMapImage(dataUrl);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleConfirmSubmit = () => {
     if (!user) return showToast("系統尚未連線", 'error');
@@ -574,6 +620,7 @@ const App = () => {
         setTempClassCounts(classCounts); 
         setTempSemesterStart(semesterStart);
         setTempSemesterEnd(semesterEnd);
+        setTempCleaningMapImage(cleaningMapImage);
         setActiveTab('settings');
         showToast('驗證成功', 'success');
       } else if (adminAction === 'clearHistory') {
@@ -633,16 +680,27 @@ const App = () => {
     setIsSavingSettings(true);
     try {
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', SETTINGS_COLLECTION, 'config');
-      await setDoc(docRef, { 
+      const payload = {
         classCounts: tempClassCounts,
         semesterStart: tempSemesterStart,
         semesterEnd: tempSemesterEnd,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid
-      });
+      };
+      
+      // 如果有圖片，則存入 Payload
+      if (tempCleaningMapImage) {
+          payload.cleaningMapImage = tempCleaningMapImage;
+      } else {
+          payload.cleaningMapImage = null;
+      }
+
+      await setDoc(docRef, payload);
+      
       setClassCounts(tempClassCounts);
       setSemesterStart(tempSemesterStart);
       setSemesterEnd(tempSemesterEnd);
+      setCleaningMapImage(tempCleaningMapImage);
       showToast("設定已更新", 'success');
       setActiveTab('score');
     } catch (e) {
@@ -720,7 +778,6 @@ const App = () => {
     );
   }
 
-  // 計算用於列印的學期歷史 (過濾掉開學前的週次)
   const semesterPrintHistory = (semesterHistory || []).filter(h => {
     const relWeek = getRelativeWeekNumber(h.week, semesterStart);
     return relWeek !== null && relWeek > 0;
@@ -730,6 +787,27 @@ const App = () => {
     <>
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800 pb-20 relative print-hide">
       
+      {/* Map Modal */}
+      {showMapModal && (
+        <div className="fixed inset-0 bg-slate-900/90 z-[60] flex flex-col items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+          <div className="flex justify-between w-full max-w-4xl mb-4 items-center">
+            <h3 className="text-white font-bold text-xl flex items-center gap-2"><Map /> 掃區分配圖</h3>
+            <button onClick={() => setShowMapModal(false)} className="text-white hover:bg-white/20 p-2 rounded-full transition-colors"><X size={24}/></button>
+          </div>
+          <div className="w-full max-w-4xl bg-slate-800 rounded-xl overflow-hidden flex items-center justify-center min-h-[50vh] relative shadow-2xl border border-slate-700 p-2">
+            {cleaningMapImage ? (
+              <img src={cleaningMapImage} alt="掃區分配圖" className="max-w-full max-h-[75vh] object-contain rounded-lg" />
+            ) : (
+              <div className="text-slate-400 flex flex-col items-center gap-3">
+                <ImageIcon size={48} className="opacity-50" />
+                <p className="font-bold">尚未設定掃區分配圖</p>
+                <p className="text-sm">請先進入「設定」頁面上傳圖檔</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Admin Login Modal */}
       {showAdminModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -804,6 +882,11 @@ const App = () => {
         {/* SCORING TAB */}
         {activeTab === 'score' && (
           <div className="animate-fade-in">
+            {/* 查看地圖按鈕 */}
+            <button onClick={() => setShowMapModal(true)} className="w-full mb-4 py-3 px-4 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 font-bold flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors shadow-sm">
+               <Map size={18} /> 查看各班掃區分配圖
+            </button>
+
             <div className="grid grid-cols-2 gap-3 mb-4">
                {SCORE_TYPES.map(type => {
                  const Icon = type.icon;
@@ -893,7 +976,6 @@ const App = () => {
               const top1 = data[0];
               const top2 = data[1];
               
-              // 檢查該年級第一名是否為連續三週霸主
               const isThreeWeekWinner = top1 && threeWeekWinners.includes(top1.classId);
 
               return (
@@ -1031,6 +1113,34 @@ const App = () => {
                   </div>
                 </div>
 
+                {/* 掃區分配圖設定 */}
+                <div>
+                  <div className="border-b border-slate-100 pb-4 mb-4">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                      <Map className="text-slate-500" /> 掃區分配圖設定
+                    </h2>
+                    <p className="text-sm text-slate-400 mt-1">上傳學校的掃區分配圖，方便老師在評分時對照。圖片會自動進行壓縮以節省空間。</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                    {tempCleaningMapImage && (
+                      <div className="mb-4 relative rounded-lg border border-slate-200 overflow-hidden bg-white flex justify-center p-2">
+                        <img src={tempCleaningMapImage} alt="預覽" className="max-h-60 object-contain" />
+                        <button onClick={() => setTempCleaningMapImage(null)} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow"><Trash2 size={16}/></button>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-white hover:bg-slate-50 transition-colors">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <Upload className="w-8 h-8 mb-3 text-slate-400" />
+                                <p className="mb-2 text-sm text-slate-500 font-bold">點擊上傳圖檔</p>
+                                <p className="text-xs text-slate-400">支援 JPG, PNG 格式 (自動壓縮)</p>
+                            </div>
+                            <input type="file" className="hidden" accept="image/png, image/jpeg" onChange={handleImageUpload} />
+                        </label>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 學期日期設定 */}
                 <div>
                   <div className="border-b border-slate-100 pb-4 mb-4">
@@ -1095,7 +1205,6 @@ const App = () => {
             const top1 = weeklyRankings[g]?.[0]?.classId || '-';
             const top2 = weeklyRankings[g]?.[1]?.classId || '-';
             
-            // 檢查該年級第一名是否為連續三週霸主
             const isThreeWeekWinner = top1 !== '-' && threeWeekWinners.includes(top1);
 
             return (
