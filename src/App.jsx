@@ -1204,38 +1204,46 @@ const App = () => {
         <h2 className="text-xl font-bold text-gray-700">{currentWeekLabel}</h2>
       </div>
 
-      {/* 表格一：當週一二名 */}
-      <h3 className="text-xl font-bold mb-3 border-l-4 border-black pl-2">當週各年級前兩名</h3>
-      <table className="w-full border-collapse border border-black mb-12 text-center">
+      {/* 表格一：當週一二名 (改為方便廣播的橫向排列) */}
+      <h3 className="text-xl font-bold mb-3 border-l-4 border-black pl-2">當週得獎名單</h3>
+      <table className="w-full border-collapse border border-black mb-12 text-center text-lg">
         <thead className="bg-gray-100">
           <tr>
-            <th className="border border-black p-3 font-bold w-1/4">年級</th>
-            <th className="border border-black p-3 font-bold text-lg w-3/8">第一名</th>
-            <th className="border border-black p-3 font-bold w-3/8">第二名</th>
+            <th className="border border-black p-3 font-bold w-1/4">名次</th>
+            <th className="border border-black p-3 font-bold w-1/4">三年級</th>
+            <th className="border border-black p-3 font-bold w-1/4">二年級</th>
+            <th className="border border-black p-3 font-bold w-1/4">一年級</th>
           </tr>
         </thead>
         <tbody>
-          {GRADES.map(g => {
-            const top1 = weeklyRankings[g]?.[0]?.classId || '-';
-            const top2 = weeklyRankings[g]?.[1]?.classId || '-';
-            
-            const isThreeWeekWinner = top1 !== '-' && threeWeekWinners.includes(top1);
-
-            return (
-              <tr key={g}>
-                <td className="border border-black p-3 font-bold">{g} 年級</td>
-                <td className="border border-black p-3 font-black text-2xl">
+          <tr>
+            <td className="border border-black p-4 font-black bg-gray-50 text-xl">第一名</td>
+            {[3, 2, 1].map(g => {
+              const top1 = weeklyRankings[g]?.[0]?.classId || '-';
+              const isThreeWeekWinner = top1 !== '-' && threeWeekWinners.includes(top1);
+              return (
+                <td key={g} className="border border-black p-4 font-black text-2xl">
                   <span className="align-middle">{top1}</span>
                   {isThreeWeekWinner && (
-                    <span className="text-sm font-bold text-black border-2 border-black ml-3 px-2 py-0.5 rounded align-middle whitespace-nowrap tracking-wider inline-block">
+                    <div className="text-sm font-bold text-black border-2 border-black px-2 py-0.5 mt-2 rounded inline-block whitespace-nowrap tracking-wider">
                       [連續三週第一名]
-                    </span>
+                    </div>
                   )}
                 </td>
-                <td className="border border-black p-3 font-bold text-gray-700 text-lg">{top2}</td>
-              </tr>
-            );
-          })}
+              );
+            })}
+          </tr>
+          <tr>
+            <td className="border border-black p-4 font-bold bg-gray-50 text-xl text-gray-700">第二名</td>
+            {[3, 2, 1].map(g => {
+              const top2 = weeklyRankings[g]?.[1]?.classId || '-';
+              return (
+                <td key={g} className="border border-black p-4 font-bold text-xl text-gray-700">
+                  {top2}
+                </td>
+              );
+            })}
+          </tr>
         </tbody>
       </table>
 
