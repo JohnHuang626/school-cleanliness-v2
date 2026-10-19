@@ -210,7 +210,7 @@ const App = () => {
         const q = query(
           collection(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME),
           orderBy('createdAt', 'desc'),
-          limit(2000)
+          limit(10000)
         );
         const unsubscribe = onSnapshot(q, (snapshot) => {
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1052,7 +1052,7 @@ const App = () => {
                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-800">最新評分紀錄</h3>
-                    <span className="text-xs bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded">最近 2000 筆</span>
+                    <span className="text-xs bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded">最近 10000 筆</span>
                   </div>
                   <button onClick={handleClearHistoryRequest} className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded transition-colors"><Trash2 size={14} /> 全部清除</button>
                </div>
@@ -1092,7 +1092,7 @@ const App = () => {
                </div>
             </div>
             <div className="text-center mt-4 text-xs text-slate-400">
-                * 為了效能考量，僅顯示最新 2000 筆資料。如需刪除舊資料請至 Firebase Console。
+                * 為了效能考量，僅顯示最新 10000 筆資料。如需刪除舊資料請至 Firebase Console。
             </div>
           </div>
         )}
